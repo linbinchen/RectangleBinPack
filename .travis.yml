@@ -1,6 +1,11 @@
 language: cpp
 sudo: false
 
+addons:
+    apt:
+      packages:
+        - plotutils
+
 script:
     - cmake .
     - cmake --build . -- -j2
