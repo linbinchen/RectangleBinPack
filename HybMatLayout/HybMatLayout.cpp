@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <fstream>
 #include <algorithm>
+#include <boost/program_options.hpp>
 
 using namespace rbp;
 struct subarr {
@@ -12,13 +13,14 @@ struct subarr {
 //    subarr(Rectsize & rs, char atype) : recsz{rs}, arrType{atype} {};
 };
 
-int DrawMatLayout(std::vector<Rect> & packedRects, rbp::RectSize & decoder){
+int DrawMatLayout(std::vector<Rect> & packedRects,
+        rbp::RectSize & decoder,
+        ofstream &outputfile
+        ){
     // set a Plotter parameter
     PlotterParams params;
     params.setplparam ("PAGESIZE", (char *)"letter,xorigin=2in,yorigin=3in");
 
-    ofstream outputfile;
-    outputfile.open("matlayout_121.ps");
     PSPlotter plotter(cin, outputfile, cerr, params); // declare Plotter
     if (plotter.openpl () < 0)                  // open Plotter
       {
@@ -99,36 +101,122 @@ int DrawMatLayout(std::vector<Rect> & packedRects, rbp::RectSize & decoder){
 
 }
 
-int main()
+int main(int ac, char **av)
 {
+    // cmdline options
+    namespace po = boost::program_options;
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("help", "produce help message")
+        ("numSubarray", po::value<int>(), "number of subarray in one quadrant")
+    ;
+    po::variables_map vm;
+    po::store(po::parse_command_line(ac, av, desc), vm);
+    po:notify(vm);
+    if (vm.count("help")) {
+        cout << desc << "\n";
+        return 1;
+    }
+    if (vm.count("numSubarray")) {
+        cout << "numSubarray set to " << vm["numSubarray"].as<int>() << ".\n";
+    } else {
+        cout << "numSubarray was not set.\n";
+    }
+    // objects & variables declaration
+    ofstream outputfile;
     subarr SRAM{{10, 15}, 'S'};
     subarr eDRAM{{4, 5}, 'D'};
     subarr NVM{{3, 3}, 'N'};
-
     rbp::RectSize decoder{20, 40};
 
-    int numSRAM = 64;
-    int numeDRAM = 128;
-    int numNVM = 64;
+    int numSubarray = vm["numSubarray"].as<int>();
+    int numSRAM = 2;
+    int numeDRAM = 1;
+    int numNVM = 1;
 
     std::vector<RectSize> inputRects(numSRAM+numeDRAM+numNVM);
     std::vector<Rect> packedRects(numSRAM+numeDRAM+numNVM);
-    std::fill_n(inputRects.begin(), numSRAM, SRAM.recsz);
-    std::fill_n(inputRects.begin() + numSRAM, numeDRAM, eDRAM.recsz);
-    std::fill_n(inputRects.begin() + numSRAM + numeDRAM, numNVM, NVM.recsz);
 
-    // Create a bin to pack to, use the bin size from command line.
     int binWidth = SRAM.recsz.width * 11;
     int binHeight = SRAM.recsz.height * 8;
     MaxRectsBinPack bin(binWidth, binHeight, false);
-    printf("Initializing bin to size %dx%d.\n", binWidth, binHeight);
-
-    // Perform the packing.
     MaxRectsBinPack::FreeRectChoiceHeuristic heuristic = MaxRectsBinPack::RectBestAreaFit; // This can be changed individually even for each rectangle packed.
-    bin.Insert(inputRects, packedRects, heuristic);
 
-    // Test success or failure.
-    printf("Done. All rectangles packed. Free space left: %.2f%%\n", 100.f - bin.Occupancy()*100.f);
-    return DrawMatLayout(packedRects, decoder);
+    for (int i = 1; i <= 3; i++)
+    {
+        switch (i) {
+            case 1:
+                numSRAM = numSubarray/2;
+                numeDRAM = numSubarray/4;
+                numNVM = numSubarray/4;
+                outputfile.open(std::to_string(numSubarray)+std::string("_211.ps"));
+                break;
+            case 2:
+                numSRAM = numSubarray/4;
+                numeDRAM = numSubarray/2;
+                numNVM = numSubarray/4;
+                outputfile.open(std::to_string(numSubarray)+std::string("_121.ps"));
+                break;
+            case 3:
+                numSRAM = numSubarray/4;
+                numeDRAM = numSubarray/4;
+                numNVM = numSubarray/2;
+                outputfile.open(std::to_string(numSubarray)+std::string("_112.ps"));
+                break;
+        }
+
+        //Iterating and find the proper x, y that yields the least area.
+        int num_x;
+        int num_y;
+        int x;
+        int y;
+        double space_left = std::numeric_limits<int>::max();
+        int sides_diff = std::numeric_limits<int>::max();
+        int bin_area = std::numeric_limits<int>::max();
+        for (x = sqrt(numSubarray); x >= sqrt(numSubarray)/2; x--)
+        {
+            for (y = sqrt(numSubarray); y >= sqrt(numSubarray)/2; y--)
+            {
+                inputRects.resize(numSRAM+numeDRAM+numNVM);
+                packedRects.resize(numSRAM+numeDRAM+numNVM);
+                std::fill_n(inputRects.begin(), numSRAM, SRAM.recsz);
+                std::fill_n(inputRects.begin() + numSRAM, numeDRAM, eDRAM.recsz);
+                std::fill_n(inputRects.begin() + numSRAM + numeDRAM, numNVM, NVM.recsz);
+                binWidth = SRAM.recsz.width * (x);
+                binHeight = SRAM.recsz.height * (y);
+                bin.Init(binWidth, binHeight, false);
+                // Perform packing
+                if (bin.Insert(inputRects, packedRects, heuristic)) {
+                    //if ((100-bin.Occupancy()*100)<space_left) {
+                    //    space_left = 100-bin.Occupancy()*100;
+                    if ((abs(binWidth*binHeight))<bin_area) {
+                        bin_area = binWidth*binHeight;
+                        space_left = 100-bin.Occupancy()*100;
+                        sides_diff = abs(binWidth-binHeight);
+                        num_x = x;
+                        num_y = y;
+                    }
+                }
+            }
+        }
+        printf ("Found area optimized bin.\n");
+        binWidth = SRAM.recsz.width * num_x;
+        binHeight = SRAM.recsz.height * num_y;
+        bin.Init(binWidth, binHeight, false);
+        printf("Initializing bin to size %dx%d.\n", binWidth, binHeight);
+        // Perform packing
+        inputRects.resize(numSRAM+numeDRAM+numNVM);
+        packedRects.resize(numSRAM+numeDRAM+numNVM);
+        std::fill_n(inputRects.begin(), numSRAM, SRAM.recsz);
+        std::fill_n(inputRects.begin() + numSRAM, numeDRAM, eDRAM.recsz);
+        std::fill_n(inputRects.begin() + numSRAM + numeDRAM, numNVM, NVM.recsz);
+        bin.Insert(inputRects, packedRects, heuristic);
+        printf("Done. All rectangles packed. Free space left: %.2f%%\n",
+                100.f - bin.Occupancy()*100.f);
+        DrawMatLayout(packedRects, decoder, outputfile);
+        outputfile.close();
+    }
+
+    return 0;
 }
 

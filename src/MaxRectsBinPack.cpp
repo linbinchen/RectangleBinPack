@@ -84,7 +84,7 @@ Rect MaxRectsBinPack::Insert(int width, int height, FreeRectChoiceHeuristic meth
     return newNode;
 }
 
-void MaxRectsBinPack::Insert(std::vector<RectSize> &rects, std::vector<Rect> &dst, FreeRectChoiceHeuristic method)
+bool MaxRectsBinPack::Insert(std::vector<RectSize> &rects, std::vector<Rect> &dst, FreeRectChoiceHeuristic method)
 {
     dst.clear();
 
@@ -111,12 +111,14 @@ void MaxRectsBinPack::Insert(std::vector<RectSize> &rects, std::vector<Rect> &ds
         }
 
         if (bestRectIndex == -1)
-            return;
+            break;
 
         PlaceRect(bestNode);
         dst.push_back(bestNode);
         rects.erase(rects.begin() + bestRectIndex);
     }
+
+    return rects.empty();
 }
 
 void MaxRectsBinPack::PlaceRect(const Rect &node)
