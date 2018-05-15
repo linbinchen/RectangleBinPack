@@ -5,6 +5,7 @@ addons:
     apt:
       packages:
         - libplot-dev
+        - libboost-dev
 
 script:
     - cmake .
