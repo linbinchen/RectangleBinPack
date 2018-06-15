@@ -124,6 +124,7 @@ int main(int ac, char **av)
     }
     // objects & variables declaration
     ofstream outputfile;
+    ofstream outputfile_orig;
     subarr SRAM{{10, 15}, 'S'};
     subarr eDRAM{{4, 5}, 'D'};
     subarr NVM{{3, 3}, 'N'};
@@ -136,6 +137,8 @@ int main(int ac, char **av)
 
     std::vector<RectSize> inputRects(numSRAM+numeDRAM+numNVM);
     std::vector<Rect> packedRects(numSRAM+numeDRAM+numNVM);
+    std::vector<Rect> origRects(numSRAM+numeDRAM+numNVM);
+
 
     int binWidth = SRAM.recsz.width * 11;
     int binHeight = SRAM.recsz.height * 8;
@@ -150,18 +153,21 @@ int main(int ac, char **av)
                 numeDRAM = numSubarray/4;
                 numNVM = numSubarray/4;
                 outputfile.open(std::to_string(numSubarray)+std::string("_211.ps"));
+                outputfile_orig.open(std::to_string(numSubarray)+std::string("_211_orig.ps"));
                 break;
             case 2:
                 numSRAM = numSubarray/4;
                 numeDRAM = numSubarray/2;
                 numNVM = numSubarray/4;
                 outputfile.open(std::to_string(numSubarray)+std::string("_121.ps"));
+                outputfile_orig.open(std::to_string(numSubarray)+std::string("_121_orig.ps"));
                 break;
             case 3:
                 numSRAM = numSubarray/4;
                 numeDRAM = numSubarray/4;
                 numNVM = numSubarray/2;
                 outputfile.open(std::to_string(numSubarray)+std::string("_112.ps"));
+                outputfile_orig.open(std::to_string(numSubarray)+std::string("_112_orig.ps"));
                 break;
         }
 
@@ -213,8 +219,23 @@ int main(int ac, char **av)
         bin.Insert(inputRects, packedRects, heuristic);
         printf("Done. All rectangles packed. Free space left: %.2f%%\n",
                 100.f - bin.Occupancy()*100.f);
+        Rect defualt_SRAM_rect{0,0,10,15};
+        Rect defualt_eDRAM_rect{0,0,4,5};
+        Rect defualt_NVM_rect{0,0,3,3};
+        origRects.resize(numSRAM+numeDRAM+numNVM);
+        std::fill_n(origRects.begin(), numSubarray, defualt_SRAM_rect);
+        std::fill_n(origRects.begin() + numSRAM, numeDRAM, defualt_eDRAM_rect);
+        std::fill_n(origRects.begin() + numSRAM + numeDRAM, numNVM, defualt_NVM_rect);
+        for (int m = 0; m < std::sqrt(numSubarray); m++)
+            for (int n = 0; n < std::sqrt(numSubarray); n++){
+                origRects[m*sqrt(numSubarray)+n].y = m * SRAM.recsz.height;
+                origRects[m*sqrt(numSubarray)+n].x = n * SRAM.recsz.width;
+            }
+
         DrawMatLayout(packedRects, decoder, outputfile);
+        DrawMatLayout(origRects, decoder, outputfile_orig);
         outputfile.close();
+        outputfile_orig.close();
     }
 
     return 0;
