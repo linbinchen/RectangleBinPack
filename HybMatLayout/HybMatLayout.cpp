@@ -138,7 +138,9 @@ int main(int ac, char **av)
     std::vector<RectSize> inputRects(numSRAM+numeDRAM+numNVM);
     std::vector<Rect> packedRects(numSRAM+numeDRAM+numNVM);
     std::vector<Rect> origRects(numSRAM+numeDRAM+numNVM);
-
+    double area_step = SRAM.recsz.height * SRAM.recsz.width +
+                       eDRAM.recsz.height * eDRAM.recsz.width +
+                       NVM.recsz.height * NVM.recsz.width;
 
     int binWidth = SRAM.recsz.width * 11;
     int binHeight = SRAM.recsz.height * 8;
@@ -152,6 +154,9 @@ int main(int ac, char **av)
                 numSRAM = numSubarray/2;
                 numeDRAM = numSubarray/4;
                 numNVM = numSubarray/4;
+                area_step = 2 * SRAM.recsz.height * SRAM.recsz.width +
+                            eDRAM.recsz.height * eDRAM.recsz.width +
+                            NVM.recsz.height * NVM.recsz.width;
                 outputfile.open(std::to_string(numSubarray)+std::string("_211.ps"));
                 outputfile_orig.open(std::to_string(numSubarray)+std::string("_211_orig.ps"));
                 break;
@@ -159,6 +164,9 @@ int main(int ac, char **av)
                 numSRAM = numSubarray/4;
                 numeDRAM = numSubarray/2;
                 numNVM = numSubarray/4;
+                area_step = SRAM.recsz.height * SRAM.recsz.width +
+                            2 * eDRAM.recsz.height * eDRAM.recsz.width +
+                            NVM.recsz.height * NVM.recsz.width;
                 outputfile.open(std::to_string(numSubarray)+std::string("_121.ps"));
                 outputfile_orig.open(std::to_string(numSubarray)+std::string("_121_orig.ps"));
                 break;
@@ -166,57 +174,30 @@ int main(int ac, char **av)
                 numSRAM = numSubarray/4;
                 numeDRAM = numSubarray/4;
                 numNVM = numSubarray/2;
+                area_step = SRAM.recsz.height * SRAM.recsz.width +
+                                   eDRAM.recsz.height * eDRAM.recsz.width +
+                                   2 * NVM.recsz.height * NVM.recsz.width;
+
                 outputfile.open(std::to_string(numSubarray)+std::string("_112.ps"));
                 outputfile_orig.open(std::to_string(numSubarray)+std::string("_112_orig.ps"));
                 break;
         }
-
-        //Iterating and find the proper x, y that yields the least area.
-        int num_x;
-        int num_y;
-        int x;
-        int y;
-        double space_left = std::numeric_limits<int>::max();
-        int sides_diff = std::numeric_limits<int>::max();
-        int bin_area = std::numeric_limits<int>::max();
-        for (x = sqrt(numSubarray); x >= sqrt(numSubarray)/2; x--)
-        {
-            for (y = sqrt(numSubarray); y >= sqrt(numSubarray)/2; y--)
-            {
+        // Iteration for find smallest bin
+        int iteration = 0;
+        do {
+                iteration++;
+                binWidth = sqrt(iteration * area_step);
+                binHeight = binWidth;
                 inputRects.resize(numSRAM+numeDRAM+numNVM);
                 packedRects.resize(numSRAM+numeDRAM+numNVM);
                 std::fill_n(inputRects.begin(), numSRAM, SRAM.recsz);
                 std::fill_n(inputRects.begin() + numSRAM, numeDRAM, eDRAM.recsz);
                 std::fill_n(inputRects.begin() + numSRAM + numeDRAM, numNVM, NVM.recsz);
-                binWidth = SRAM.recsz.width * (x);
-                binHeight = SRAM.recsz.height * (y);
                 bin.Init(binWidth, binHeight, false);
-                // Perform packing
-                if (bin.Insert(inputRects, packedRects, heuristic)) {
-                    //if ((100-bin.Occupancy()*100)<space_left) {
-                    //    space_left = 100-bin.Occupancy()*100;
-                    if ((abs(binWidth*binHeight))<bin_area) {
-                        bin_area = binWidth*binHeight;
-                        space_left = 100-bin.Occupancy()*100;
-                        sides_diff = abs(binWidth-binHeight);
-                        num_x = x;
-                        num_y = y;
-                    }
-                }
-            }
-        }
-        printf ("Found area optimized bin.\n");
-        binWidth = SRAM.recsz.width * num_x;
-        binHeight = SRAM.recsz.height * num_y;
-        bin.Init(binWidth, binHeight, false);
-        printf("Initializing bin to size %dx%d.\n", binWidth, binHeight);
+
+        } while (bin.Insert(inputRects, packedRects, heuristic) == false);
+
         // Perform packing
-        inputRects.resize(numSRAM+numeDRAM+numNVM);
-        packedRects.resize(numSRAM+numeDRAM+numNVM);
-        std::fill_n(inputRects.begin(), numSRAM, SRAM.recsz);
-        std::fill_n(inputRects.begin() + numSRAM, numeDRAM, eDRAM.recsz);
-        std::fill_n(inputRects.begin() + numSRAM + numeDRAM, numNVM, NVM.recsz);
-        bin.Insert(inputRects, packedRects, heuristic);
         printf("Done. All rectangles packed. Free space left: %.2f%%\n",
                 100.f - bin.Occupancy()*100.f);
         Rect defualt_SRAM_rect{0,0,10,15};
@@ -240,4 +221,44 @@ int main(int ac, char **av)
 
     return 0;
 }
+
+//int Algorithm_1(){
+//        //Iterating and find the proper x, y that yields the least area.
+//        int num_x;
+//        int num_y;
+//        int x;
+//        int y;
+//        double space_left = std::numeric_limits<int>::max();
+//        int sides_diff = std::numeric_limits<int>::max();
+//        int bin_area = std::numeric_limits<int>::max();
+//        for (x = sqrt(numSubarray); x >= sqrt(numSubarray)/2; x--)
+//        {
+//            for (y = sqrt(numSubarray); y >= sqrt(numSubarray)/2; y--)
+//            {
+//                inputRects.resize(numSRAM+numeDRAM+numNVM);
+//                packedRects.resize(numSRAM+numeDRAM+numNVM);
+//                std::fill_n(inputRects.begin(), numSRAM, SRAM.recsz);
+//                std::fill_n(inputRects.begin() + numSRAM, numeDRAM, eDRAM.recsz);
+//                std::fill_n(inputRects.begin() + numSRAM + numeDRAM, numNVM, NVM.recsz);
+//                binWidth = SRAM.recsz.width * (x);
+//                binHeight = SRAM.recsz.height * (y);
+//                bin.Init(binWidth, binHeight, false);
+//                // Perform packing
+//                if (bin.Insert(inputRects, packedRects, heuristic)) {
+//                    //if ((100-bin.Occupancy()*100)<space_left) {
+//                    //    space_left = 100-bin.Occupancy()*100;
+//                    if ((abs(binWidth*binHeight))<bin_area) {
+//                        bin_area = binWidth*binHeight;
+//                        space_left = 100-bin.Occupancy()*100;
+//                        sides_diff = abs(binWidth-binHeight);
+//                        num_x = x;
+//                        num_y = y;
+//                    }
+//                }
+//            }
+//        }
+//        printf ("Found area optimized bin.\n");
+//        binWidth = SRAM.recsz.width * num_x;
+//        binHeight = SRAM.recsz.height * num_y;
+//}
 
